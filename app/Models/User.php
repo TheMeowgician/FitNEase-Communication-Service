@@ -2,47 +2,55 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasApiTokens;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
+    // Connect to auth database for shared authentication
+    protected $connection = 'auth_db';
+    protected $primaryKey = 'user_id';
+
     protected $fillable = [
-        'name',
+        'username',
         'email',
-        'password',
+        'password_hash',
+        'first_name',
+        'last_name',
+        'age',
+        'gender',
+        'fitness_level',
+        'activity_level',
+        'is_active',
+        'email_verified_at',
+        'last_login'
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
-        'password',
+        'password_hash',
+        'email_verification_token',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'last_login' => 'datetime',
+            'is_active' => 'boolean',
+            'age' => 'integer',
+            'target_muscle_groups' => 'array',
+            'fitness_goals' => 'array',
         ];
+    }
+
+    // Override the password column name since auth service uses password_hash
+    public function getAuthPassword()
+    {
+        return $this->password_hash;
     }
 }
