@@ -44,8 +44,8 @@ Route::prefix('comms')->middleware('auth:sanctum')->group(function () {
 });
 
 // Email verification required routes
-Route::prefix('comms')->middleware(['auth:sanctum', 'verified'])->group(function () {
-    Route::post('/ai-chat/advanced', [ChatController::class, 'startChat']);
+Route::prefix('comms')->middleware(['auth:sanctum', 'verified.email'])->group(function () {
+    Route::post('/ai-chat/advanced', [ChatController::class, 'advancedChat']);
     Route::post('/music-integration/premium', [MusicController::class, 'premiumConnect']);
 });
 

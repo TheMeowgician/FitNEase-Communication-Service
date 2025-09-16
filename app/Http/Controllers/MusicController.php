@@ -37,7 +37,9 @@ class MusicController extends Controller
                 'client_id' => $provider->client_id,
                 'response_type' => 'code',
                 'redirect_uri' => env('APP_URL') . '/music/callback',
-                'scope' => implode(' ', $provider->supported_scopes),
+                'scope' => is_array($provider->supported_scopes)
+                    ? implode(' ', $provider->supported_scopes)
+                    : 'user-read-playback-state user-modify-playback-state',
                 'state' => base64_encode(json_encode([
                     'user_id' => $user->user_id,
                     'provider' => $request->provider
@@ -78,13 +80,12 @@ class MusicController extends Controller
             $tokens = $this->exchangeCodeForTokens($provider, $request->code);
 
             MusicIntegration::updateOrCreate(
-                ['user_id' => $userId, 'service_name' => $providerName],
+                ['user_id' => $userId],
                 [
+                    'service_name' => $providerName,
                     'access_token' => $tokens['access_token'],
                     'refresh_token' => $tokens['refresh_token'] ?? null,
-                    'token_expires_at' => isset($tokens['expires_in'])
-                        ? now()->addSeconds($tokens['expires_in'])
-                        : null,
+                    'token_expires_at' => now()->addSeconds($tokens['expires_in']),
                     'is_active' => true,
                     'last_sync_at' => now()
                 ]

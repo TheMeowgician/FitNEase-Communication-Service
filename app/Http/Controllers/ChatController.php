@@ -158,6 +158,43 @@ class ChatController extends Controller
         return response()->json(['message' => 'Chat session ended successfully']);
     }
 
+    public function advancedChat(Request $request)
+    {
+        // This method is for verified email users with advanced features
+        $user = $request->user();
+
+        try {
+            $userData = $this->getUserProfile($request->bearerToken(), $user->user_id);
+
+            $session = ChatSession::create([
+                'user_id' => $user->user_id,
+                'session_type' => 'ai_instructor',
+                'session_title' => 'Advanced AI Fitness Assistant',
+                'context_data' => [
+                    'fitness_level' => $userData['fitness_level'] ?? 'beginner',
+                    'fitness_goals' => $userData['fitness_goals'] ?? [],
+                    'experience_years' => $userData['workout_experience_years'] ?? 0,
+                    'advanced_features' => true,
+                    'verified_email' => true
+                ]
+            ]);
+
+            return response()->json([
+                'session_id' => $session->chat_session_id,
+                'message' => 'Advanced AI chat session started with premium features. How can I help optimize your fitness journey?',
+                'features' => ['personalized_nutrition', 'advanced_analytics', 'premium_workouts']
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Failed to start advanced AI chat', [
+                'user_id' => $user->user_id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json(['error' => 'Failed to start advanced chat session'], 500);
+        }
+    }
+
     private function getUserProfile($token, $userId)
     {
         $client = new Client();

@@ -8,6 +8,7 @@ use Exception;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 
 class NotificationController extends Controller
 {
@@ -85,42 +86,60 @@ class NotificationController extends Controller
 
     public function achievementNotification(Request $request)
     {
-        $request->validate([
-            'user_id' => 'required|integer',
-            'achievement_id' => 'required|integer',
-            'achievement_title' => 'required|string',
-            'achievement_description' => 'required|string'
-        ]);
+        return $this->handleAchievementNotification($request);
+    }
 
-        $user = $request->user();
+    public function handleAchievementNotification(Request $request)
+    {
+        // Validate request has valid Sanctum token
+        $user = $this->validateUserAccess($request);
 
+        $userId = $request->input('user_id');
+        $achievementId = $request->input('achievement_id');
+
+        // Get user data from Auth service using Sanctum token
+        $authClient = new Client();
         try {
-            $userData = $this->getUserData($request->bearerToken(), $request->user_id);
-            $patterns = $this->getUserPatterns($request->bearerToken(), $request->user_id);
-
-            $notification = $this->createPersonalizedNotification(
-                $request->user_id,
-                $request->achievement_id,
-                $request->achievement_title,
-                $request->achievement_description,
-                $userData,
-                $patterns
-            );
-
-            return response()->json([
-                'message' => 'Achievement notification processed',
-                'notification' => $notification
+            $userResponse = $authClient->get(env('AUTH_SERVICE_URL') . '/auth/user-profile/' . $userId, [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $request->bearerToken(),
+                    'Accept' => 'application/json'
+                ]
             ]);
+
+            if ($userResponse->getStatusCode() !== 200) {
+                return response()->json(['error' => 'Failed to fetch user data'], 400);
+            }
+
+            $userData = json_decode($userResponse->getBody(), true);
 
         } catch (Exception $e) {
-            Log::error('Failed to process achievement notification', [
-                'user_id' => $request->user_id,
-                'achievement_id' => $request->achievement_id,
+            Log::error('Failed to fetch user data for achievement notification', [
+                'user_id' => $userId,
                 'error' => $e->getMessage()
             ]);
-
-            return response()->json(['error' => 'Failed to process achievement notification'], 500);
+            return response()->json(['error' => 'Service communication failed'], 500);
         }
+
+        // Get behavioral patterns for timing optimization
+        try {
+            $mlClient = new Client();
+            $patternsResponse = $mlClient->get(env('ML_SERVICE_URL') . '/api/v1/user-patterns/' . $userId, [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $request->bearerToken()
+                ]
+            ]);
+
+            $patterns = json_decode($patternsResponse->getBody(), true);
+        } catch (Exception $e) {
+            // Continue without ML patterns if service unavailable
+            $patterns = null;
+        }
+
+        // Create personalized achievement notification
+        $this->createPersonalizedNotification($userId, $achievementId, $userData, $patterns);
+
+        return response()->json(['message' => 'Achievement notification processed']);
     }
 
     public function getNotificationSettings(Request $request, $userId)
@@ -225,14 +244,23 @@ class NotificationController extends Controller
         }
     }
 
-    private function createPersonalizedNotification($userId, $achievementId, $title, $description, $userData, $patterns)
+    private function createPersonalizedNotification($userId, $achievementId, $userData, $patterns)
     {
-        $personalizedMessage = $this->personalizeMessage($description, $userData, $patterns);
+        $userName = $userData['name'] ?? 'there';
+        $fitnessLevel = $userData['fitness_level'] ?? 'beginner';
+
+        $personalizations = [
+            'beginner' => "Great job, {$userName}! You've unlocked a new achievement! You're building great habits!",
+            'intermediate' => "Awesome work, {$userName}! You've earned a new achievement! Your dedication is paying off!",
+            'advanced' => "Outstanding achievement, {$userName}! You've reached a new milestone! You're setting a great example!"
+        ];
+
+        $personalizedMessage = $personalizations[$fitnessLevel] ?? $personalizations['beginner'];
 
         return Notification::create([
             'user_id' => $userId,
             'notification_type' => 'achievement',
-            'title' => $title,
+            'title' => 'New Achievement Unlocked!',
             'message' => $personalizedMessage,
             'action_data' => [
                 'achievement_id' => $achievementId,
@@ -255,5 +283,17 @@ class NotificationController extends Controller
         ];
 
         return $personalizations[$fitnessLevel] ?? $personalizations['beginner'];
+    }
+
+    private function validateUserAccess(Request $request)
+    {
+        // Sanctum middleware automatically validates the token
+        $user = $request->user();
+
+        if (!$user) {
+            throw new UnauthorizedHttpException('Bearer', 'Invalid or missing token');
+        }
+
+        return $user;
     }
 }
