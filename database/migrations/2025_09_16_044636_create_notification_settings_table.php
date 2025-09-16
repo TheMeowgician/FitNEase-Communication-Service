@@ -12,8 +12,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('notification_settings', function (Blueprint $table) {
-            $table->id();
+            $table->id('setting_id');
+            $table->unsignedBigInteger('user_id');
+            $table->enum('notification_type', ['workout_reminder', 'achievement', 'group_invite', 'system', 'social', 'email_verification']);
+            $table->boolean('enabled')->default(true);
+            $table->boolean('email_enabled')->default(true);
+            $table->boolean('push_enabled')->default(true);
+            $table->json('preferences')->nullable();
             $table->timestamps();
+
+            $table->unique(['user_id', 'notification_type']);
+            $table->index('user_id');
         });
     }
 
