@@ -12,8 +12,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('email_templates', function (Blueprint $table) {
-            $table->id();
+            $table->id('template_id');
+            $table->string('template_name', 100)->unique();
+            $table->enum('template_type', ['verification', 'welcome', 'password_reset', 'notification']);
+            $table->string('subject_template');
+            $table->text('html_template');
+            $table->text('text_template')->nullable();
+            $table->json('variables')->nullable();
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
+
+            $table->index(['template_type', 'is_active']);
         });
     }
 
