@@ -52,9 +52,9 @@ class NotificationController extends Controller
 
     public function getUserNotifications(Request $request, $userId)
     {
-        $user = $request->user();
+        $user = $request->attributes->get('user');
 
-        if ($user->user_id !== (int) $userId) {
+        if ($user['user_id'] !== (int) $userId) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 

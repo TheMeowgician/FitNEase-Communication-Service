@@ -8,8 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
+    return $request->attributes->get('user');
+})->middleware('auth.api');
 
 // Email Verification System (Public routes - no authentication required)
 Route::prefix('comms')->group(function () {
@@ -17,8 +17,8 @@ Route::prefix('comms')->group(function () {
     Route::post('/send-welcome-email', [EmailController::class, 'sendWelcome']);
 });
 
-// Sanctum protected routes
-Route::prefix('comms')->middleware('auth:sanctum')->group(function () {
+// API authenticated routes
+Route::prefix('comms')->middleware('auth.api')->group(function () {
     // AI Chat System (requires verified email)
     Route::post('/ai-chat', [ChatController::class, 'startChat']);
     Route::post('/send-message', [ChatController::class, 'sendMessage']);
@@ -44,13 +44,13 @@ Route::prefix('comms')->middleware('auth:sanctum')->group(function () {
 });
 
 // Email verification required routes
-Route::prefix('comms')->middleware(['auth:sanctum', 'verified.email'])->group(function () {
+Route::prefix('comms')->middleware(['auth.api', 'verified.email'])->group(function () {
     Route::post('/ai-chat/advanced', [ChatController::class, 'advancedChat']);
     Route::post('/music-integration/premium', [MusicController::class, 'premiumConnect']);
 });
 
 // Admin only routes
-Route::prefix('comms')->middleware(['auth:sanctum', 'ability:admin-access'])->group(function () {
+Route::prefix('comms')->middleware(['auth.api'])->group(function () {
     Route::post('/test-email', [EmailController::class, 'testEmail']);
     Route::get('/email-templates/{type}', [EmailController::class, 'getTemplate']);
     Route::put('/email-templates/{id}', [EmailController::class, 'updateTemplate']);
