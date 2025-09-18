@@ -7,6 +7,16 @@ use App\Http\Controllers\MusicController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+// Health check endpoint for Docker and service monitoring
+Route::get('/health', function () {
+    return response()->json([
+        'status' => 'healthy',
+        'service' => 'fitnease-comms',
+        'timestamp' => now()->toISOString(),
+        'database' => 'connected'
+    ]);
+});
+
 Route::get('/user', function (Request $request) {
     return $request->attributes->get('user');
 })->middleware('auth.api');
