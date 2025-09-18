@@ -4,6 +4,8 @@ use App\Http\Controllers\EmailController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\MusicController;
+use App\Http\Controllers\ServiceTestController;
+use App\Http\Controllers\ServiceCommunicationTestController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -68,3 +70,15 @@ Route::prefix('comms')->middleware(['auth.api'])->group(function () {
 
 // Public music callback (no auth required for OAuth callback)
 Route::get('/music/callback', [MusicController::class, 'callback']);
+
+// Service testing routes - for validating inter-service communication
+Route::middleware('auth.api')->prefix('service-tests')->group(function () {
+    Route::get('/auth', [ServiceTestController::class, 'testAuthService']);
+    Route::get('/engagement', [ServiceTestController::class, 'testEngagementService']);
+    Route::get('/tracking', [ServiceTestController::class, 'testTrackingService']);
+    Route::get('/all', [ServiceTestController::class, 'testAllServices']);
+
+    Route::get('/connectivity', [ServiceCommunicationTestController::class, 'testServiceConnectivity']);
+    Route::get('/token-validation', [ServiceCommunicationTestController::class, 'testCommsTokenValidation']);
+    Route::get('/integration', [ServiceCommunicationTestController::class, 'testServiceIntegration']);
+});
