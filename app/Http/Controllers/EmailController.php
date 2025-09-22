@@ -17,6 +17,7 @@ class EmailController extends Controller
             'user_id' => 'required|integer',
             'email' => 'required|email',
             'token' => 'required|string',
+            'verification_code' => 'required|string|size:6',
             'user_name' => 'required|string',
             'verification_url' => 'required|url'
         ]);
@@ -32,6 +33,7 @@ class EmailController extends Controller
 
             $emailData = $template->replaceVariables([
                 'user_name' => $request->user_name,
+                'verification_code' => $request->verification_code,
                 'verification_url' => $request->verification_url,
                 'app_name' => 'FitnEase'
             ]);
