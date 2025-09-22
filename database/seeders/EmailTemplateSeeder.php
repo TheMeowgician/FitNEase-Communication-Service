@@ -17,14 +17,15 @@ class EmailTemplateSeeder extends Seeder
         EmailTemplate::create([
             'template_name' => 'email_verification',
             'template_type' => 'verification',
-            'subject_template' => 'Verify Your {{app_name}} Account',
+            'subject_template' => 'Your {{app_name}} Verification Code',
             'html_template' => '<!DOCTYPE html>
 <html>
 <head>
     <title>Verify Your Email - {{app_name}}</title>
     <style>
         .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
-        .button { background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; }
+        .code-box { background-color: #f8f9fa; border: 2px solid #4CAF50; border-radius: 8px; padding: 20px; text-align: center; margin: 30px 0; }
+        .verification-code { font-size: 32px; font-weight: bold; color: #4CAF50; letter-spacing: 8px; margin: 10px 0; }
         .header { text-align: center; padding: 20px; background-color: #f8f9fa; }
     </style>
 </head>
@@ -37,16 +38,15 @@ class EmailTemplateSeeder extends Seeder
         <div style="padding: 20px;">
             <p>Hi {{user_name}},</p>
 
-            <p>Thank you for joining {{app_name}}! To complete your registration and start your fitness journey, please verify your email address by clicking the button below:</p>
+            <p>Thank you for joining {{app_name}}! To complete your registration and start your fitness journey, please enter this verification code in the app:</p>
 
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="{{verification_url}}" class="button">Verify Email Address</a>
+            <div class="code-box">
+                <p style="margin: 0; font-size: 18px; color: #666;">Your Verification Code:</p>
+                <div class="verification-code">{{verification_code}}</div>
+                <p style="margin: 0; font-size: 14px; color: #999;">Enter this code in the {{app_name}} app</p>
             </div>
 
-            <p>If the button doesn\'t work, you can copy and paste this link into your browser:</p>
-            <p style="word-break: break-all; color: #666;">{{verification_url}}</p>
-
-            <p>This verification link will expire in 24 hours for security reasons.</p>
+            <p><strong>Important:</strong> This verification code will expire in 15 minutes for security reasons.</p>
 
             <p>If you didn\'t create a {{app_name}} account, please ignore this email.</p>
 
@@ -57,17 +57,17 @@ class EmailTemplateSeeder extends Seeder
 </html>',
             'text_template' => 'Hi {{user_name}},
 
-Thank you for joining {{app_name}}! To complete your registration, please verify your email address by visiting:
+Thank you for joining {{app_name}}! To complete your registration, please enter this verification code in the app:
 
-{{verification_url}}
+Your Verification Code: {{verification_code}}
 
-This link will expire in 24 hours for security reasons.
+This code will expire in 15 minutes for security reasons.
 
 If you didn\'t create a {{app_name}} account, please ignore this email.
 
 Best regards,
 The {{app_name}} Team',
-            'variables' => ["user_name", "verification_url", "app_name"],
+            'variables' => ["user_name", "verification_code", "verification_url", "app_name"],
             'is_active' => true
         ]);
 
