@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Notification;
 use App\Models\NotificationSetting;
+use App\Events\NotificationCreated;
 use Exception;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
@@ -67,10 +68,7 @@ class NotificationController extends Controller
 
     public function markAsRead(Request $request, $id)
     {
-        $user = $request->user();
-        $notification = Notification::where('notification_id', $id)
-            ->where('user_id', $user->user_id)
-            ->first();
+        $notification = Notification::where('notification_id', $id)->first();
 
         if (!$notification) {
             return response()->json(['error' => 'Notification not found'], 404);
@@ -82,6 +80,93 @@ class NotificationController extends Controller
         ]);
 
         return response()->json(['message' => 'Notification marked as read']);
+    }
+
+    public function getUnreadCount(Request $request, $userId)
+    {
+        $user = $request->attributes->get('user');
+
+        if ($user['user_id'] !== (int) $userId) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $count = Notification::where('user_id', $userId)
+            ->where('is_read', false)
+            ->count();
+
+        return response()->json(['unread_count' => $count]);
+    }
+
+    public function markAllAsRead(Request $request, $userId)
+    {
+        $user = $request->attributes->get('user');
+
+        if ($user['user_id'] !== (int) $userId) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        Notification::where('user_id', $userId)
+            ->where('is_read', false)
+            ->update([
+                'is_read' => true,
+                'read_at' => now()
+            ]);
+
+        return response()->json(['message' => 'All notifications marked as read']);
+    }
+
+    public function groupInvitation(Request $request)
+    {
+        $request->validate([
+            'type' => 'required|string',
+            'group_id' => 'required|integer',
+            'group_name' => 'required|string',
+            'invited_user_id' => 'required|integer',
+            'inviter_user_id' => 'required|integer',
+            'group_code' => 'required|string'
+        ]);
+
+        try {
+            $notification = Notification::create([
+                'user_id' => $request->invited_user_id,
+                'notification_type' => 'group_invite',
+                'title' => 'Group Invitation',
+                'message' => "You've been invited to join {$request->group_name}",
+                'action_data' => [
+                    'type' => 'group_invite',
+                    'group_id' => $request->group_id,
+                    'group_name' => $request->group_name,
+                    'group_code' => $request->group_code,
+                    'inviter_user_id' => $request->inviter_user_id
+                ],
+                'is_sent' => true,
+                'sent_at' => now()
+            ]);
+
+            // Broadcast notification in real-time
+            broadcast(new NotificationCreated($notification))->toOthers();
+
+            Log::info('Group invitation notification created and broadcast', [
+                'notification_id' => $notification->notification_id,
+                'invited_user_id' => $request->invited_user_id,
+                'group_id' => $request->group_id,
+                'channel' => 'user.' . $request->invited_user_id
+            ]);
+
+            return response()->json([
+                'message' => 'Group invitation notification created',
+                'notification' => $notification
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Failed to create group invitation notification', [
+                'invited_user_id' => $request->invited_user_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json(['error' => 'Failed to create notification'], 500);
+        }
     }
 
     public function achievementNotification(Request $request)

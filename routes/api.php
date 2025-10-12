@@ -24,9 +24,11 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth.api');
 
 // Email Verification System (Public routes - no authentication required)
+// Service-to-service communication routes (no auth required)
 Route::prefix('comms')->group(function () {
     Route::post('/send-verification', [EmailController::class, 'sendVerification']);
     Route::post('/send-welcome-email', [EmailController::class, 'sendWelcome']);
+    Route::post('/group-invitation', [NotificationController::class, 'groupInvitation']);
 });
 
 // API authenticated routes
@@ -41,7 +43,9 @@ Route::prefix('comms')->middleware('auth.api')->group(function () {
     // Notification Management
     Route::post('/notification', [NotificationController::class, 'sendNotification']);
     Route::get('/notifications/{userId}', [NotificationController::class, 'getUserNotifications']);
-    Route::put('/notification/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::get('/notifications/{userId}/unread-count', [NotificationController::class, 'getUnreadCount']);
+    Route::put('/notifications/{userId}/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::post('/achievement-notification', [NotificationController::class, 'achievementNotification']);
     Route::get('/notification-settings/{userId}', [NotificationController::class, 'getNotificationSettings']);
     Route::put('/notification-settings/{userId}', [NotificationController::class, 'updateNotificationSettings']);
