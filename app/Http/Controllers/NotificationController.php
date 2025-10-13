@@ -169,6 +169,216 @@ class NotificationController extends Controller
         }
     }
 
+    public function groupInvitationDeclined(Request $request)
+    {
+        Log::info('Group invitation declined request received', [
+            'request_data' => $request->all()
+        ]);
+
+        try {
+            $validated = $request->validate([
+                'inviter_user_id' => 'required|integer',
+                'group_name' => 'required|string',
+                'declined_user_id' => 'required|integer',
+            ]);
+
+            Log::info('Validation passed', ['validated_data' => $validated]);
+
+            // For service-to-service calls, we'll use a simple message without the user's name
+            // since we don't have authentication token here
+            Log::info('Creating notification in database');
+
+            $notification = Notification::create([
+                'user_id' => $request->inviter_user_id,
+                'notification_type' => 'social',
+                'title' => 'Invitation Declined',
+                'message' => "Someone declined your invitation to join {$request->group_name}",
+                'action_data' => [
+                    'type' => 'group_invite_declined',
+                    'group_name' => $request->group_name,
+                    'declined_user_id' => $request->declined_user_id,
+                ],
+                'is_sent' => true,
+                'sent_at' => now()
+            ]);
+
+            Log::info('Notification created successfully', [
+                'notification_id' => $notification->notification_id
+            ]);
+
+            // Broadcast notification in real-time
+            Log::info('Broadcasting notification');
+            broadcast(new NotificationCreated($notification))->toOthers();
+            Log::info('Broadcast completed');
+
+            Log::info('Group invitation declined notification created and broadcast', [
+                'notification_id' => $notification->notification_id,
+                'inviter_user_id' => $request->inviter_user_id,
+                'declined_user_id' => $request->declined_user_id,
+                'channel' => 'user.' . $request->inviter_user_id
+            ]);
+
+            return response()->json([
+                'message' => 'Group invitation declined notification created',
+                'notification' => $notification
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation failed for group invitation declined', [
+                'errors' => $e->errors(),
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'error' => 'Validation failed',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (Exception $e) {
+            Log::error('Failed to create group invitation declined notification', [
+                'inviter_user_id' => $request->inviter_user_id ?? null,
+                'declined_user_id' => $request->declined_user_id ?? null,
+                'error' => $e->getMessage(),
+                'error_class' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to create notification',
+                'message' => $e->getMessage(),
+                'type' => get_class($e)
+            ], 500);
+        }
+    }
+
+    public function groupInvitationAccepted(Request $request)
+    {
+        Log::info('Group invitation accepted request received', [
+            'request_data' => $request->all()
+        ]);
+
+        try {
+            $validated = $request->validate([
+                'inviter_user_id' => 'required|integer',
+                'group_name' => 'required|string',
+                'accepted_user_id' => 'required|integer',
+            ]);
+
+            Log::info('Validation passed', ['validated_data' => $validated]);
+
+            $notification = Notification::create([
+                'user_id' => $request->inviter_user_id,
+                'notification_type' => 'social',
+                'title' => 'Invitation Accepted',
+                'message' => "Someone accepted your invitation to join {$request->group_name}",
+                'action_data' => [
+                    'type' => 'group_invite_accepted',
+                    'group_name' => $request->group_name,
+                    'accepted_user_id' => $request->accepted_user_id,
+                ],
+                'is_sent' => true,
+                'sent_at' => now()
+            ]);
+
+            Log::info('Notification created successfully', [
+                'notification_id' => $notification->notification_id
+            ]);
+
+            // Broadcast notification in real-time
+            Log::info('Broadcasting notification');
+            broadcast(new NotificationCreated($notification))->toOthers();
+            Log::info('Broadcast completed');
+
+            Log::info('Group invitation accepted notification created and broadcast', [
+                'notification_id' => $notification->notification_id,
+                'inviter_user_id' => $request->inviter_user_id,
+                'accepted_user_id' => $request->accepted_user_id,
+                'channel' => 'user.' . $request->inviter_user_id
+            ]);
+
+            return response()->json([
+                'message' => 'Group invitation accepted notification created',
+                'notification' => $notification
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation failed for group invitation accepted', [
+                'errors' => $e->errors(),
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'error' => 'Validation failed',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (Exception $e) {
+            Log::error('Failed to create group invitation accepted notification', [
+                'inviter_user_id' => $request->inviter_user_id ?? null,
+                'accepted_user_id' => $request->accepted_user_id ?? null,
+                'error' => $e->getMessage(),
+                'error_class' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to create notification',
+                'message' => $e->getMessage(),
+                'type' => get_class($e)
+            ], 500);
+        }
+    }
+
+    public function deleteNotification(Request $request, $id)
+    {
+        $user = $request->attributes->get('user');
+
+        $notification = Notification::where('notification_id', $id)->first();
+
+        if (!$notification) {
+            return response()->json(['error' => 'Notification not found'], 404);
+        }
+
+        // Ensure user can only delete their own notifications
+        if ($notification->user_id !== $user['user_id']) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $notification->delete();
+
+        Log::info('Notification deleted', [
+            'notification_id' => $id,
+            'user_id' => $user['user_id']
+        ]);
+
+        return response()->json(['message' => 'Notification deleted successfully']);
+    }
+
+    public function deleteAllNotifications(Request $request, $userId)
+    {
+        $user = $request->attributes->get('user');
+
+        if ($user['user_id'] !== (int) $userId) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $deletedCount = Notification::where('user_id', $userId)->delete();
+
+        Log::info('All notifications deleted', [
+            'user_id' => $userId,
+            'deleted_count' => $deletedCount
+        ]);
+
+        return response()->json([
+            'message' => 'All notifications deleted successfully',
+            'deleted_count' => $deletedCount
+        ]);
+    }
+
     public function achievementNotification(Request $request)
     {
         return $this->handleAchievementNotification($request);

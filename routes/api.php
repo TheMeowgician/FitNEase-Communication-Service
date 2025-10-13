@@ -29,6 +29,8 @@ Route::prefix('comms')->group(function () {
     Route::post('/send-verification', [EmailController::class, 'sendVerification']);
     Route::post('/send-welcome-email', [EmailController::class, 'sendWelcome']);
     Route::post('/group-invitation', [NotificationController::class, 'groupInvitation']);
+    Route::post('/group-invitation-declined', [NotificationController::class, 'groupInvitationDeclined']);
+    Route::post('/group-invitation-accepted', [NotificationController::class, 'groupInvitationAccepted']);
 });
 
 // API authenticated routes
@@ -45,7 +47,9 @@ Route::prefix('comms')->middleware('auth.api')->group(function () {
     Route::get('/notifications/{userId}', [NotificationController::class, 'getUserNotifications']);
     Route::get('/notifications/{userId}/unread-count', [NotificationController::class, 'getUnreadCount']);
     Route::put('/notifications/{userId}/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::delete('/notifications/{userId}/delete-all', [NotificationController::class, 'deleteAllNotifications']);
     Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::delete('/notifications/{id}', [NotificationController::class, 'deleteNotification']);
     Route::post('/achievement-notification', [NotificationController::class, 'achievementNotification']);
     Route::get('/notification-settings/{userId}', [NotificationController::class, 'getNotificationSettings']);
     Route::put('/notification-settings/{userId}', [NotificationController::class, 'updateNotificationSettings']);
