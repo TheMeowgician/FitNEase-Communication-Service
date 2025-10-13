@@ -591,4 +591,31 @@ class NotificationController extends Controller
 
         return $user;
     }
+
+    public function deleteEmailVerificationNotification(Request $request, $userId)
+    {
+        try {
+            $deleted = Notification::where('user_id', $userId)
+                ->where('notification_type', 'email_verification')
+                ->delete();
+
+            Log::info('Email verification notification deleted', [
+                'user_id' => $userId,
+                'deleted_count' => $deleted
+            ]);
+
+            return response()->json([
+                'message' => 'Email verification notification deleted successfully',
+                'deleted_count' => $deleted
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Failed to delete email verification notification', [
+                'user_id' => $userId,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json(['error' => 'Failed to delete notification'], 500);
+        }
+    }
 }
