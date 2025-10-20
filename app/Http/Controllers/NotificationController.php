@@ -779,7 +779,8 @@ class NotificationController extends Controller
     {
         try {
             $client = new Client();
-            $response = $client->get(env('AUTH_SERVICE_URL') . '/api/auth/user-profile/' . $userId, [
+            // Use internal endpoint that doesn't require authentication
+            $response = $client->get(env('AUTH_SERVICE_URL') . '/api/internal/user-profile/' . $userId, [
                 'timeout' => 5,
                 'headers' => [
                     'Accept' => 'application/json',
@@ -788,11 +789,13 @@ class NotificationController extends Controller
 
             if ($response->getStatusCode() === 200) {
                 $data = json_decode($response->getBody(), true);
-                $username = $data['data']['username'] ?? null;
+                // Auth service returns user object directly, not wrapped in 'data'
+                $username = $data['username'] ?? $data['data']['username'] ?? null;
 
                 Log::info('Username fetched from auth service', [
                     'user_id' => $userId,
-                    'username' => $username
+                    'username' => $username,
+                    'response_keys' => array_keys($data)
                 ]);
 
                 return $username;
