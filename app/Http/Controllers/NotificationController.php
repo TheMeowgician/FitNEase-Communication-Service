@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Notification;
 use App\Models\NotificationSetting;
 use App\Events\NotificationCreated;
+use App\Events\UnreadCountUpdated;
 use Exception;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
@@ -79,6 +80,18 @@ class NotificationController extends Controller
             'read_at' => now()
         ]);
 
+        // Broadcast updated unread count for instant badge update
+        $unreadCount = Notification::where('user_id', $notification->user_id)
+            ->where('is_read', false)
+            ->count();
+        broadcast(new UnreadCountUpdated($notification->user_id, $unreadCount));
+
+        Log::info('Notification marked as read, unread count updated', [
+            'notification_id' => $notification->notification_id,
+            'user_id' => $notification->user_id,
+            'unread_count' => $unreadCount
+        ]);
+
         return response()->json(['message' => 'Notification marked as read']);
     }
 
@@ -111,6 +124,14 @@ class NotificationController extends Controller
                 'is_read' => true,
                 'read_at' => now()
             ]);
+
+        // Broadcast updated unread count (should be 0)
+        broadcast(new UnreadCountUpdated($userId, 0));
+
+        Log::info('All notifications marked as read, unread count reset', [
+            'user_id' => $userId,
+            'unread_count' => 0
+        ]);
 
         return response()->json(['message' => 'All notifications marked as read']);
     }
@@ -146,10 +167,17 @@ class NotificationController extends Controller
             // Broadcast notification in real-time
             broadcast(new NotificationCreated($notification))->toOthers();
 
+            // Broadcast updated unread count for instant badge update
+            $unreadCount = Notification::where('user_id', $request->invited_user_id)
+                ->where('is_read', false)
+                ->count();
+            broadcast(new UnreadCountUpdated($request->invited_user_id, $unreadCount));
+
             Log::info('Group invitation notification created and broadcast', [
                 'notification_id' => $notification->notification_id,
                 'invited_user_id' => $request->invited_user_id,
                 'group_id' => $request->group_id,
+                'unread_count' => $unreadCount,
                 'channel' => 'user.' . $request->invited_user_id
             ]);
 
@@ -184,15 +212,19 @@ class NotificationController extends Controller
 
             Log::info('Validation passed', ['validated_data' => $validated]);
 
-            // For service-to-service calls, we'll use a simple message without the user's name
-            // since we don't have authentication token here
+            // Fetch username from auth service
+            $declinedUsername = $this->getUsernameFromAuthService($request->declined_user_id);
+            if (!$declinedUsername) {
+                $declinedUsername = 'Someone'; // Fallback
+            }
+
             Log::info('Creating notification in database');
 
             $notification = Notification::create([
                 'user_id' => $request->inviter_user_id,
                 'notification_type' => 'social',
                 'title' => 'Invitation Declined',
-                'message' => "Someone declined your invitation to join {$request->group_name}",
+                'message' => "{$declinedUsername} declined your invitation to join {$request->group_name}",
                 'action_data' => [
                     'type' => 'group_invite_declined',
                     'group_name' => $request->group_name,
@@ -210,6 +242,13 @@ class NotificationController extends Controller
             Log::info('Broadcasting notification');
             broadcast(new NotificationCreated($notification))->toOthers();
             Log::info('Broadcast completed');
+
+            // Broadcast updated unread count for instant badge update
+            $unreadCount = Notification::where('user_id', $request->inviter_user_id)
+                ->where('is_read', false)
+                ->count();
+            broadcast(new UnreadCountUpdated($request->inviter_user_id, $unreadCount));
+            Log::info('Unread count broadcast sent', ['unread_count' => $unreadCount]);
 
             Log::info('Group invitation declined notification created and broadcast', [
                 'notification_id' => $notification->notification_id,
@@ -268,11 +307,17 @@ class NotificationController extends Controller
 
             Log::info('Validation passed', ['validated_data' => $validated]);
 
+            // Fetch username from auth service
+            $acceptedUsername = $this->getUsernameFromAuthService($request->accepted_user_id);
+            if (!$acceptedUsername) {
+                $acceptedUsername = 'Someone'; // Fallback
+            }
+
             $notification = Notification::create([
                 'user_id' => $request->inviter_user_id,
                 'notification_type' => 'social',
                 'title' => 'Invitation Accepted',
-                'message' => "Someone accepted your invitation to join {$request->group_name}",
+                'message' => "{$acceptedUsername} accepted your invitation to join {$request->group_name}",
                 'action_data' => [
                     'type' => 'group_invite_accepted',
                     'group_name' => $request->group_name,
@@ -283,13 +328,21 @@ class NotificationController extends Controller
             ]);
 
             Log::info('Notification created successfully', [
-                'notification_id' => $notification->notification_id
+                'notification_id' => $notification->notification_id,
+                'username' => $acceptedUsername
             ]);
 
             // Broadcast notification in real-time
             Log::info('Broadcasting notification');
             broadcast(new NotificationCreated($notification))->toOthers();
             Log::info('Broadcast completed');
+
+            // Broadcast updated unread count for instant badge update
+            $unreadCount = Notification::where('user_id', $request->inviter_user_id)
+                ->where('is_read', false)
+                ->count();
+            broadcast(new UnreadCountUpdated($request->inviter_user_id, $unreadCount));
+            Log::info('Unread count broadcast sent', ['unread_count' => $unreadCount]);
 
             Log::info('Group invitation accepted notification created and broadcast', [
                 'notification_id' => $notification->notification_id,
@@ -616,6 +669,144 @@ class NotificationController extends Controller
             ]);
 
             return response()->json(['error' => 'Failed to delete notification'], 500);
+        }
+    }
+
+    /**
+     * Create notification when a user is kicked from a group
+     */
+    public function groupMemberKicked(Request $request)
+    {
+        Log::info('Group member kicked notification request received', [
+            'request_data' => $request->all()
+        ]);
+
+        try {
+            $validated = $request->validate([
+                'kicked_user_id' => 'required|integer',
+                'group_name' => 'required|string',
+                'group_id' => 'required|integer',
+                'kicked_by_user_id' => 'required|integer',
+            ]);
+
+            Log::info('Validation passed', ['validated_data' => $validated]);
+
+            // Fetch username of the person who kicked
+            $kickedByUsername = $this->getUsernameFromAuthService($request->kicked_by_user_id);
+            if (!$kickedByUsername) {
+                $kickedByUsername = 'Admin'; // Fallback
+            }
+
+            $notification = Notification::create([
+                'user_id' => $request->kicked_user_id,
+                'notification_type' => 'social',
+                'title' => 'Removed from Group',
+                'message' => "You were removed from {$request->group_name} by {$kickedByUsername}",
+                'action_data' => [
+                    'type' => 'group_member_kicked',
+                    'group_name' => $request->group_name,
+                    'group_id' => $request->group_id,
+                    'kicked_by_user_id' => $request->kicked_by_user_id,
+                ],
+                'is_sent' => true,
+                'sent_at' => now()
+            ]);
+
+            Log::info('Notification created successfully', [
+                'notification_id' => $notification->notification_id,
+                'kicked_by_username' => $kickedByUsername
+            ]);
+
+            // Broadcast notification in real-time
+            Log::info('Broadcasting notification');
+            broadcast(new NotificationCreated($notification))->toOthers();
+            Log::info('Broadcast completed');
+
+            // Broadcast updated unread count for instant badge update
+            $unreadCount = Notification::where('user_id', $request->kicked_user_id)
+                ->where('is_read', false)
+                ->count();
+            broadcast(new UnreadCountUpdated($request->kicked_user_id, $unreadCount));
+            Log::info('Unread count broadcast sent', ['unread_count' => $unreadCount]);
+
+            Log::info('Group member kicked notification created and broadcast', [
+                'notification_id' => $notification->notification_id,
+                'kicked_user_id' => $request->kicked_user_id,
+                'kicked_by_user_id' => $request->kicked_by_user_id,
+                'channel' => 'user.' . $request->kicked_user_id
+            ]);
+
+            return response()->json([
+                'message' => 'Group member kicked notification created',
+                'notification' => $notification
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation failed for group member kicked', [
+                'errors' => $e->errors(),
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'error' => 'Validation failed',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (Exception $e) {
+            Log::error('Failed to create group member kicked notification', [
+                'kicked_user_id' => $request->kicked_user_id ?? null,
+                'kicked_by_user_id' => $request->kicked_by_user_id ?? null,
+                'error' => $e->getMessage(),
+                'error_class' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to create notification',
+                'message' => $e->getMessage(),
+                'type' => get_class($e)
+            ], 500);
+        }
+    }
+
+    /**
+     * Fetch username from auth service
+     * Helper method to get username for notification messages
+     */
+    private function getUsernameFromAuthService(int $userId): ?string
+    {
+        try {
+            $client = new Client();
+            $response = $client->get(env('AUTH_SERVICE_URL') . '/api/auth/user-profile/' . $userId, [
+                'timeout' => 5,
+                'headers' => [
+                    'Accept' => 'application/json',
+                ]
+            ]);
+
+            if ($response->getStatusCode() === 200) {
+                $data = json_decode($response->getBody(), true);
+                $username = $data['data']['username'] ?? null;
+
+                Log::info('Username fetched from auth service', [
+                    'user_id' => $userId,
+                    'username' => $username
+                ]);
+
+                return $username;
+            }
+
+            return null;
+
+        } catch (Exception $e) {
+            Log::warning('Failed to fetch username from auth service', [
+                'user_id' => $userId,
+                'error' => $e->getMessage()
+            ]);
+
+            return null;
         }
     }
 }

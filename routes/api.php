@@ -31,6 +31,7 @@ Route::prefix('comms')->group(function () {
     Route::post('/group-invitation', [NotificationController::class, 'groupInvitation']);
     Route::post('/group-invitation-declined', [NotificationController::class, 'groupInvitationDeclined']);
     Route::post('/group-invitation-accepted', [NotificationController::class, 'groupInvitationAccepted']);
+    Route::post('/group-member-kicked', [NotificationController::class, 'groupMemberKicked']);
     Route::delete('/notifications/email-verification/{userId}', [NotificationController::class, 'deleteEmailVerificationNotification']);
 });
 
