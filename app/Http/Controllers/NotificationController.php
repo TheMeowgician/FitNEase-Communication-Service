@@ -772,6 +772,241 @@ class NotificationController extends Controller
     }
 
     /**
+     * Create notification when someone requests to join a group
+     * POST /api/comms/group-join-request
+     */
+    public function groupJoinRequest(Request $request)
+    {
+        Log::info('Group join request notification received', [
+            'request_data' => $request->all()
+        ]);
+
+        try {
+            $validated = $request->validate([
+                'owner_user_id' => 'required|integer',
+                'requester_user_id' => 'required|integer',
+                'requester_username' => 'required|string',
+                'requester_role' => 'nullable|string',
+                'group_id' => 'required|integer',
+                'group_name' => 'required|string',
+            ]);
+
+            $isMentor = ($request->requester_role === 'mentor');
+            $roleLabel = $isMentor ? ' (Mentor)' : '';
+
+            $notification = Notification::create([
+                'user_id' => $request->owner_user_id,
+                'notification_type' => 'group_join_request',
+                'title' => 'New Join Request',
+                'message' => "{$request->requester_username}{$roleLabel} wants to join {$request->group_name}",
+                'action_data' => [
+                    'type' => 'group_join_request',
+                    'group_id' => $request->group_id,
+                    'group_name' => $request->group_name,
+                    'requester_user_id' => $request->requester_user_id,
+                    'requester_username' => $request->requester_username,
+                    'requester_role' => $request->requester_role,
+                ],
+                'is_sent' => true,
+                'sent_at' => now()
+            ]);
+
+            // Broadcast notification in real-time
+            broadcast(new NotificationCreated($notification))->toOthers();
+
+            // Broadcast updated unread count
+            $unreadCount = Notification::where('user_id', $request->owner_user_id)
+                ->where('is_read', false)
+                ->count();
+            broadcast(new UnreadCountUpdated($request->owner_user_id, $unreadCount));
+
+            Log::info('Group join request notification created', [
+                'notification_id' => $notification->notification_id,
+                'owner_user_id' => $request->owner_user_id,
+                'requester_user_id' => $request->requester_user_id
+            ]);
+
+            return response()->json([
+                'message' => 'Join request notification created',
+                'notification' => $notification
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation failed for group join request', [
+                'errors' => $e->errors(),
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'error' => 'Validation failed',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (Exception $e) {
+            Log::error('Failed to create group join request notification', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to create notification',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Create notification when join request is approved
+     * POST /api/comms/group-join-request-approved
+     */
+    public function groupJoinRequestApproved(Request $request)
+    {
+        Log::info('Group join request approved notification received', [
+            'request_data' => $request->all()
+        ]);
+
+        try {
+            $validated = $request->validate([
+                'requester_user_id' => 'required|integer',
+                'group_id' => 'required|integer',
+                'group_name' => 'required|string',
+            ]);
+
+            $notification = Notification::create([
+                'user_id' => $request->requester_user_id,
+                'notification_type' => 'group_join_approved',
+                'title' => 'Join Request Approved!',
+                'message' => "Your request to join {$request->group_name} has been approved!",
+                'action_data' => [
+                    'type' => 'group_join_approved',
+                    'group_id' => $request->group_id,
+                    'group_name' => $request->group_name,
+                ],
+                'is_sent' => true,
+                'sent_at' => now()
+            ]);
+
+            // Broadcast notification in real-time
+            broadcast(new NotificationCreated($notification))->toOthers();
+
+            // Broadcast updated unread count
+            $unreadCount = Notification::where('user_id', $request->requester_user_id)
+                ->where('is_read', false)
+                ->count();
+            broadcast(new UnreadCountUpdated($request->requester_user_id, $unreadCount));
+
+            Log::info('Group join approved notification created', [
+                'notification_id' => $notification->notification_id,
+                'requester_user_id' => $request->requester_user_id
+            ]);
+
+            return response()->json([
+                'message' => 'Join approved notification created',
+                'notification' => $notification
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation failed for group join approved', [
+                'errors' => $e->errors()
+            ]);
+
+            return response()->json([
+                'error' => 'Validation failed',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (Exception $e) {
+            Log::error('Failed to create group join approved notification', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to create notification',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Create notification when join request is rejected
+     * POST /api/comms/group-join-request-rejected
+     */
+    public function groupJoinRequestRejected(Request $request)
+    {
+        Log::info('Group join request rejected notification received', [
+            'request_data' => $request->all()
+        ]);
+
+        try {
+            $validated = $request->validate([
+                'requester_user_id' => 'required|integer',
+                'group_id' => 'required|integer',
+                'group_name' => 'required|string',
+                'reason' => 'nullable|string',
+            ]);
+
+            $message = "Your request to join {$request->group_name} was declined";
+            if ($request->reason) {
+                $message .= ": {$request->reason}";
+            }
+
+            $notification = Notification::create([
+                'user_id' => $request->requester_user_id,
+                'notification_type' => 'group_join_rejected',
+                'title' => 'Join Request Declined',
+                'message' => $message,
+                'action_data' => [
+                    'type' => 'group_join_rejected',
+                    'group_id' => $request->group_id,
+                    'group_name' => $request->group_name,
+                    'reason' => $request->reason,
+                ],
+                'is_sent' => true,
+                'sent_at' => now()
+            ]);
+
+            // Broadcast notification in real-time
+            broadcast(new NotificationCreated($notification))->toOthers();
+
+            // Broadcast updated unread count
+            $unreadCount = Notification::where('user_id', $request->requester_user_id)
+                ->where('is_read', false)
+                ->count();
+            broadcast(new UnreadCountUpdated($request->requester_user_id, $unreadCount));
+
+            Log::info('Group join rejected notification created', [
+                'notification_id' => $notification->notification_id,
+                'requester_user_id' => $request->requester_user_id
+            ]);
+
+            return response()->json([
+                'message' => 'Join rejected notification created',
+                'notification' => $notification
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation failed for group join rejected', [
+                'errors' => $e->errors()
+            ]);
+
+            return response()->json([
+                'error' => 'Validation failed',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (Exception $e) {
+            Log::error('Failed to create group join rejected notification', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to create notification',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Fetch username from auth service
      * Helper method to get username for notification messages
      */
