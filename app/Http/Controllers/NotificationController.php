@@ -6,6 +6,7 @@ use App\Models\Notification;
 use App\Models\NotificationSetting;
 use App\Events\NotificationCreated;
 use App\Events\UnreadCountUpdated;
+use App\Services\ExpoPushService;
 use Exception;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
@@ -173,6 +174,9 @@ class NotificationController extends Controller
                 ->count();
             broadcast(new UnreadCountUpdated($request->invited_user_id, $unreadCount));
 
+            // Send push notification
+            $this->sendPushNotification($notification);
+
             Log::info('Group invitation notification created and broadcast', [
                 'notification_id' => $notification->notification_id,
                 'invited_user_id' => $request->invited_user_id,
@@ -249,6 +253,9 @@ class NotificationController extends Controller
                 ->count();
             broadcast(new UnreadCountUpdated($request->inviter_user_id, $unreadCount));
             Log::info('Unread count broadcast sent', ['unread_count' => $unreadCount]);
+
+            // Send push notification
+            $this->sendPushNotification($notification);
 
             Log::info('Group invitation declined notification created and broadcast', [
                 'notification_id' => $notification->notification_id,
@@ -343,6 +350,9 @@ class NotificationController extends Controller
                 ->count();
             broadcast(new UnreadCountUpdated($request->inviter_user_id, $unreadCount));
             Log::info('Unread count broadcast sent', ['unread_count' => $unreadCount]);
+
+            // Send push notification
+            $this->sendPushNotification($notification);
 
             Log::info('Group invitation accepted notification created and broadcast', [
                 'notification_id' => $notification->notification_id,
@@ -729,6 +739,9 @@ class NotificationController extends Controller
             broadcast(new UnreadCountUpdated($request->kicked_user_id, $unreadCount));
             Log::info('Unread count broadcast sent', ['unread_count' => $unreadCount]);
 
+            // Send push notification
+            $this->sendPushNotification($notification);
+
             Log::info('Group member kicked notification created and broadcast', [
                 'notification_id' => $notification->notification_id,
                 'kicked_user_id' => $request->kicked_user_id,
@@ -820,6 +833,9 @@ class NotificationController extends Controller
                 ->count();
             broadcast(new UnreadCountUpdated($request->owner_user_id, $unreadCount));
 
+            // Send push notification
+            $this->sendPushNotification($notification);
+
             Log::info('Group join request notification created', [
                 'notification_id' => $notification->notification_id,
                 'owner_user_id' => $request->owner_user_id,
@@ -894,6 +910,9 @@ class NotificationController extends Controller
                 ->where('is_read', false)
                 ->count();
             broadcast(new UnreadCountUpdated($request->requester_user_id, $unreadCount));
+
+            // Send push notification
+            $this->sendPushNotification($notification);
 
             Log::info('Group join approved notification created', [
                 'notification_id' => $notification->notification_id,
@@ -974,6 +993,9 @@ class NotificationController extends Controller
                 ->count();
             broadcast(new UnreadCountUpdated($request->requester_user_id, $unreadCount));
 
+            // Send push notification
+            $this->sendPushNotification($notification);
+
             Log::info('Group join rejected notification created', [
                 'notification_id' => $notification->notification_id,
                 'requester_user_id' => $request->requester_user_id
@@ -1003,6 +1025,53 @@ class NotificationController extends Controller
                 'error' => 'Failed to create notification',
                 'message' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Send push notification to user after creating notification
+     * This is a helper method that wraps ExpoPushService
+     */
+    private function sendPushNotification(Notification $notification): void
+    {
+        try {
+            $pushService = new ExpoPushService();
+
+            // Build data payload for navigation
+            $data = [
+                'notification_id' => $notification->notification_id,
+                'notification_type' => $notification->notification_type,
+                'type' => $notification->action_data['type'] ?? $notification->notification_type,
+            ];
+
+            // Add relevant IDs from action_data for navigation
+            if (isset($notification->action_data['group_id'])) {
+                $data['group_id'] = $notification->action_data['group_id'];
+            }
+            if (isset($notification->action_data['achievement_id'])) {
+                $data['achievement_id'] = $notification->action_data['achievement_id'];
+            }
+
+            $result = $pushService->sendToUser(
+                $notification->user_id,
+                $notification->title,
+                $notification->message,
+                $data
+            );
+
+            Log::info('Push notification sent', [
+                'notification_id' => $notification->notification_id,
+                'user_id' => $notification->user_id,
+                'result' => $result,
+            ]);
+
+        } catch (Exception $e) {
+            // Don't throw - push notification failure shouldn't break the flow
+            Log::warning('Failed to send push notification', [
+                'notification_id' => $notification->notification_id,
+                'user_id' => $notification->user_id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

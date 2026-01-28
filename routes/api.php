@@ -3,6 +3,7 @@
 use App\Http\Controllers\EmailController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\MusicController;
 use App\Http\Controllers\ServiceTestController;
 use App\Http\Controllers\ServiceCommunicationTestController;
@@ -46,6 +47,12 @@ Route::prefix('comms')->middleware('auth.api')->group(function () {
     Route::get('/chat-sessions/{userId}', [ChatController::class, 'getUserSessions']);
     Route::get('/chat-messages/{sessionId}', [ChatController::class, 'getSessionMessages']);
     Route::post('/end-chat-session', [ChatController::class, 'endSession']);
+
+    // Device Token Management (Push Notifications)
+    Route::post('/device-tokens', [DeviceTokenController::class, 'registerToken']);
+    Route::delete('/device-tokens', [DeviceTokenController::class, 'removeToken']);
+    Route::get('/device-tokens/{userId}', [DeviceTokenController::class, 'getUserTokens']);
+    Route::delete('/device-tokens/user/{userId}', [DeviceTokenController::class, 'deactivateAllUserTokens']);
 
     // Notification Management
     Route::post('/notification', [NotificationController::class, 'sendNotification']);
