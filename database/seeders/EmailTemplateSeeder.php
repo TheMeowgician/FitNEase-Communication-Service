@@ -138,18 +138,19 @@ The {{app_name}} Team',
             'is_active' => true
         ]);
 
-        // Password Reset Template
+        // Password Reset Template (6-digit code for mobile app)
         EmailTemplate::create([
             'template_name' => 'password_reset',
             'template_type' => 'password_reset',
-            'subject_template' => 'Reset Your {{app_name}} Password',
+            'subject_template' => 'Your {{app_name}} Password Reset Code',
             'html_template' => '<!DOCTYPE html>
 <html>
 <head>
     <title>Reset Your Password - {{app_name}}</title>
     <style>
         .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
-        .button { background-color: #ff6b6b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; }
+        .code-box { background-color: #f8f9fa; border: 2px solid #0091FF; border-radius: 8px; padding: 20px; text-align: center; margin: 30px 0; }
+        .reset-code { font-size: 32px; font-weight: bold; color: #0091FF; letter-spacing: 8px; margin: 10px 0; }
         .header { text-align: center; padding: 20px; background-color: #f8f9fa; }
     </style>
 </head>
@@ -162,16 +163,15 @@ The {{app_name}} Team',
         <div style="padding: 20px;">
             <p>Hi {{user_name}},</p>
 
-            <p>We received a request to reset your password for your {{app_name}} account.</p>
+            <p>We received a request to reset your password for your {{app_name}} account. Enter this code in the app to reset your password:</p>
 
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="{{reset_url}}" class="button">Reset Password</a>
+            <div class="code-box">
+                <p style="margin: 0; font-size: 18px; color: #666;">Your Reset Code:</p>
+                <div class="reset-code">{{reset_code}}</div>
+                <p style="margin: 0; font-size: 14px; color: #999;">Enter this code in the {{app_name}} app</p>
             </div>
 
-            <p>If the button doesn\'t work, copy and paste this link into your browser:</p>
-            <p style="word-break: break-all; color: #666;">{{reset_url}}</p>
-
-            <p>This password reset link will expire in 1 hour for security reasons.</p>
+            <p><strong>Important:</strong> This code will expire in 15 minutes for security reasons.</p>
 
             <p>If you didn\'t request a password reset, please ignore this email. Your password will remain unchanged.</p>
 
@@ -184,15 +184,15 @@ The {{app_name}} Team',
 
 We received a request to reset your password for your {{app_name}} account.
 
-Reset your password here: {{reset_url}}
+Your Reset Code: {{reset_code}}
 
-This link will expire in 1 hour for security reasons.
+This code will expire in 15 minutes for security reasons.
 
 If you didn\'t request a password reset, please ignore this email.
 
 Best regards,
 The {{app_name}} Team',
-            'variables' => ["user_name", "reset_url", "app_name"],
+            'variables' => ["user_name", "reset_code", "app_name"],
             'is_active' => true
         ]);
 

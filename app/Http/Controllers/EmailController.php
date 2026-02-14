@@ -119,6 +119,49 @@ class EmailController extends Controller
         }
     }
 
+    public function sendPasswordReset(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|integer',
+            'email' => 'required|email',
+            'reset_code' => 'required|string|size:6',
+            'user_name' => 'required|string',
+        ]);
+
+        try {
+            $template = EmailTemplate::where('template_type', 'password_reset')
+                ->where('is_active', true)
+                ->first();
+
+            if (!$template) {
+                throw new Exception('Password reset email template not found');
+            }
+
+            $emailData = $template->replaceVariables([
+                'user_name' => $request->user_name,
+                'reset_code' => $request->reset_code,
+                'app_name' => 'FitnEase'
+            ]);
+
+            Mail::send([], [], function ($message) use ($request, $emailData) {
+                $message->to($request->email)
+                    ->subject($emailData['subject'])
+                    ->html($emailData['html']);
+            });
+
+            return response()->json(['message' => 'Password reset email sent successfully']);
+
+        } catch (Exception $e) {
+            Log::error('Password reset email failed', [
+                'user_id' => $request->user_id,
+                'email' => $request->email,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json(['error' => 'Failed to send password reset email'], 500);
+        }
+    }
+
     public function getTemplate($type)
     {
         $template = EmailTemplate::where('template_type', $type)

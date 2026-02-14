@@ -29,6 +29,7 @@ Route::get('/user', function (Request $request) {
 Route::prefix('comms')->group(function () {
     Route::post('/send-verification', [EmailController::class, 'sendVerification']);
     Route::post('/send-welcome-email', [EmailController::class, 'sendWelcome']);
+    Route::post('/send-password-reset', [EmailController::class, 'sendPasswordReset']);
     Route::post('/group-invitation', [NotificationController::class, 'groupInvitation']);
     Route::post('/group-invitation-declined', [NotificationController::class, 'groupInvitationDeclined']);
     Route::post('/group-invitation-accepted', [NotificationController::class, 'groupInvitationAccepted']);
